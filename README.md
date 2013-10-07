@@ -129,4 +129,4 @@ The code is licensed under the BSD two clause license. No warranty ... use at ow
 
 ###Future
 
-An implementation of the code using OMP existis and was used for corss checking a validating the code here. A future version using MPI for multiprocessing is also possible.
+An implementation of the code using OMP exists and was used for cross checking a validating the code here. A version using MPI for multiprocessing across multiple machines is partly implemented.
