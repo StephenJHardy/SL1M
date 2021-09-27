@@ -784,14 +784,11 @@ __global__ void kernel_calcvisgausscomp(ftype *usr, ftype *vsr, ftype *wsr, ftyp
 
 void calculateDeltaVisibilitiesFromIntensities(hvecf const & xs, hvecf const & ys, hvecf const &is, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf & realp, hvecf & imp)
 {
-  int splitpt = us.size()/2; // half the calculation goes on each GPU card
-#pragma omp parallel
+  int splitpt = us.size(); // half the calculation goes on each GPU card
   {
-#pragma omp sections
     {
-#pragma omp section
       {
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 
 	// Copy host vectors to the device
 	dvecf xs1(xs);
@@ -827,40 +824,6 @@ void calculateDeltaVisibilitiesFromIntensities(hvecf const & xs, hvecf const & y
 	thrust::copy(resi.begin(),resi.end(),imp.begin());
 
       }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf is1(is);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-
-
-	dvecf resr(us.size()-splitpt);
-	dvecf resi(us.size()-splitpt);
-
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] ); usr += splitpt;
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] ); vsr += splitpt;
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] ); wsr += splitpt;
-	ftype * isr = thrust::raw_pointer_cast( &is1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] );
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] );
-	ftype * resrr = thrust::raw_pointer_cast( &resr[0] );
-	ftype * resir = thrust::raw_pointer_cast( &resi[0] );
-	int nvis = us1.size() - splitpt;
-	int npix = xs.size();
-	
-	dim3 dimGrid((nvis - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-	kernel_calcvisdelta<<<dimGrid,dimBlock>>>(usr,vsr,wsr,resrr,resir,nvis,xsr,ysr,isr,npix);
-
-	// copy the result into the second half of the returned vector
-	thrust::copy(resr.begin(),resr.end(),realp.begin()+splitpt);
-	thrust::copy(resi.begin(),resi.end(),imp.begin()+splitpt);
-      }
     }
   }
 }
@@ -884,15 +847,12 @@ void calculateDeltaVisibilitiesFromIntensities(hvecf const & xs, hvecf const & y
 
 void calculateDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf const & ys, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf const & realp, hvecf const & imp, hvecf & is)
 {
-  int splitpt = xs.size()/2;
-#pragma omp parallel
+  int splitpt = xs.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
 // We run this part on the first GPU selected using the thread number
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 
 	// copy host memory to the device.
 	dvecf xs1(xs);
@@ -930,40 +890,6 @@ void calculateDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf const & y
 	thrust::copy(res.begin(),res.end(),is.begin());
 
       }
-#pragma omp section
-      {
-      // This second part we calculate on the second GPU - all the visibilities are needed
-      // but we only compute over half the xsr and ysrs, and the output is copied into the second half of is
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-	dvecf realp1(realp);
-	dvecf imp1(imp);
-
-	dvecf res(xs.size() - splitpt);
-	
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] );
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] );
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] );
-	ftype * visrr = thrust::raw_pointer_cast( &realp1[0] );
-	ftype * visir = thrust::raw_pointer_cast( &imp1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] ); xsr += splitpt;
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] ); ysr += splitpt;
-	ftype * resr = thrust::raw_pointer_cast( &res[0] );
-	int nvis = us1.size();
-	int npix = xs.size() - splitpt;
-	
-	dim3 dimGrid((npix - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calcintensdelta<<<dimGrid,dimBlock>>>(usr,vsr,wsr,visrr,visir,nvis,xsr,ysr,resr,npix);
-
-	thrust::copy(res.begin(),res.end(),is.begin()+splitpt);
-      }
     }
   }
 }
@@ -986,14 +912,11 @@ void calculateDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf const & y
 
 void calculateComplexDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf const & ys, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf const & realp, hvecf const & imp, hvecf & isr, hvecf & isi)
 {
-  int splitpt = xs.size()/2;
-#pragma omp parallel
+  int splitpt = xs.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 	dvecf xs1(xs);
 	dvecf ys1(ys);
 	dvecf us1(us);
@@ -1027,41 +950,6 @@ void calculateComplexDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf co
 	thrust::copy(ires.begin(),ires.end(),isi.begin());
 
       }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-	dvecf realp1(realp);
-	dvecf imp1(imp);
-
-	dvecf rres(xs.size() - splitpt);
-	dvecf ires(xs.size() - splitpt);
-	
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] );
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] );
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] );
-	ftype * visrr = thrust::raw_pointer_cast( &realp1[0] );
-	ftype * visir = thrust::raw_pointer_cast( &imp1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] ); xsr += splitpt;
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] ); ysr += splitpt;
-	ftype * rresr = thrust::raw_pointer_cast( &rres[0] );
-	ftype * iresr = thrust::raw_pointer_cast( &ires[0] );
-	int nvis = us1.size();
-	int npix = xs.size() - splitpt;
-	
-	dim3 dimGrid((npix - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calccompintensdelta<<<dimGrid,dimBlock>>>(usr,vsr,wsr,visrr,visir,nvis,xsr,ysr,rresr,iresr,npix);
-
-	thrust::copy(rres.begin(),rres.end(),isr.begin()+splitpt);
-	thrust::copy(ires.begin(),ires.end(),isi.begin()+splitpt);
-      }
     }
   }
 }
@@ -1085,12 +973,9 @@ void calculateComplexDeltaIntensitiesFromVisibilities(hvecf const & xs, hvecf co
 
 void calculateDeltaVisibilitiesFromComplexIntensities(hvecf const & xs, hvecf const & ys, hvecf const &isr, hvecf const &isi, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf & realp, hvecf & imp)
 {
-  int splitpt = us.size()/2;
-#pragma omp parallel
+  int splitpt = us.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
 	int res1 = cudaSetDevice(omp_get_thread_num());
 	dvecf xs1(xs);
@@ -1126,42 +1011,6 @@ void calculateDeltaVisibilitiesFromComplexIntensities(hvecf const & xs, hvecf co
 	thrust::copy(resr.begin(),resr.end(),realp.begin());
 	thrust::copy(resi.begin(),resi.end(),imp.begin());
 
-      }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf isr1(isr);
-	dvecf isi1(isi);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-
-
-	dvecf resr(us.size()-splitpt);
-	dvecf resi(us.size()-splitpt);
-
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] ); usr += splitpt;
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] ); vsr += splitpt;
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] ); wsr += splitpt;
-	ftype * isrr = thrust::raw_pointer_cast( &isr1[0] );
-	ftype * isir = thrust::raw_pointer_cast( &isi1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] );
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] );
-	ftype * resrr = thrust::raw_pointer_cast( &resr[0] );
-	ftype * resir = thrust::raw_pointer_cast( &resi[0] );
-	int nvis = us1.size() - splitpt;
-	int npix = xs.size();
-	
-	dim3 dimGrid((nvis - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calcvisdeltacomp<<<dimGrid,dimBlock>>>(usr,vsr,wsr,resrr,resir,nvis,xsr,ysr,isrr,isir,npix);
-
-	thrust::copy(resr.begin(),resr.end(),realp.begin()+splitpt);
-	thrust::copy(resi.begin(),resi.end(),imp.begin()+splitpt);
       }
     }
   }
@@ -1188,15 +1037,12 @@ void calculateDeltaVisibilitiesFromComplexIntensities(hvecf const & xs, hvecf co
 
 void calculateGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf const & ys, hvecf const & ss, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf const & realp, hvecf const & imp, hvecf & is)
 {
-  int splitpt = xs.size()/2;
-#pragma omp parallel
+  int splitpt = xs.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
 // We run this part on the first GPU selected using the thread number
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 
 	// copy host memory to the device.
 	dvecf xs1(xs);
@@ -1236,40 +1082,6 @@ void calculateGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf const & y
 	thrust::copy(res.begin(),res.end(),is.begin());
 
       }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf ss1(ss);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-	dvecf realp1(realp);
-	dvecf imp1(imp);
-
-	dvecf res(xs.size() - splitpt);
-	
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] );
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] );
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] );
-	ftype * visrr = thrust::raw_pointer_cast( &realp1[0] );
-	ftype * visir = thrust::raw_pointer_cast( &imp1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] ); xsr += splitpt;
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] ); ysr += splitpt;
-	ftype * ssr = thrust::raw_pointer_cast( &ss1[0] ); ssr += splitpt;
-	ftype * resr = thrust::raw_pointer_cast( &res[0] );
-	int nvis = us1.size();
-	int npix = xs.size() - splitpt;
-	
-	dim3 dimGrid((npix - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calcintensgauss<<<dimGrid,dimBlock>>>(usr,vsr,wsr,visrr,visir,nvis,xsr,ysr,ssr,resr,npix);
-
-	thrust::copy(res.begin(),res.end(),is.begin()+splitpt);
-      }
     }
   }
 }
@@ -1292,14 +1104,11 @@ void calculateGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf const & y
 
 void calculateGaussVisibilitiesFromIntensities(hvecf const & xs, hvecf const & ys, hvecf const & ss, hvecf const &is, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf & realp, hvecf & imp)
 {
-  int splitpt = us.size()/2;
-#pragma omp parallel
+  int splitpt = us.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 	dvecf xs1(xs);
 	dvecf ys1(ys);
 	dvecf ss1(ss);
@@ -1334,42 +1143,6 @@ void calculateGaussVisibilitiesFromIntensities(hvecf const & xs, hvecf const & y
 	thrust::copy(resi.begin(),resi.end(),imp.begin());
 
       }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf ss1(ss);
-	dvecf is1(is);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-
-
-	dvecf resr(us.size()-splitpt);
-	dvecf resi(us.size()-splitpt);
-
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] ); usr += splitpt;
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] ); vsr += splitpt;
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] ); wsr += splitpt;
-	ftype * isr = thrust::raw_pointer_cast( &is1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] );
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] );
-	ftype * ssr = thrust::raw_pointer_cast( &ss1[0] );
-	ftype * resrr = thrust::raw_pointer_cast( &resr[0] );
-	ftype * resir = thrust::raw_pointer_cast( &resi[0] );
-	int nvis = us1.size() - splitpt;
-	int npix = xs.size();
-	
-	dim3 dimGrid((nvis - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calcvisgauss<<<dimGrid,dimBlock>>>(usr,vsr,wsr,resrr,resir,nvis,xsr,ysr,ssr,isr,npix);
-
-	thrust::copy(resr.begin(),resr.end(),realp.begin()+splitpt);
-	thrust::copy(resi.begin(),resi.end(),imp.begin()+splitpt);
-      }
     }
   }
 }
@@ -1392,14 +1165,11 @@ void calculateGaussVisibilitiesFromIntensities(hvecf const & xs, hvecf const & y
 
 void calculateComplexGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf const & ys, hvecf const & ss, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf const & realp, hvecf const & imp, hvecf & isr, hvecf & isi)
 {
-  int splitpt = xs.size()/2;
-#pragma omp parallel
+  int splitpt = xs.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 	dvecf xs1(xs);
 	dvecf ys1(ys);
 	dvecf ss1(ss);
@@ -1435,43 +1205,6 @@ void calculateComplexGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf co
 	thrust::copy(ires.begin(),ires.end(),isi.begin());
 
       }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf ss1(ss);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-	dvecf realp1(realp);
-	dvecf imp1(imp);
-
-	dvecf rres(xs.size() - splitpt);
-	dvecf ires(xs.size() - splitpt);
-	
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] );
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] );
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] );
-	ftype * visrr = thrust::raw_pointer_cast( &realp1[0] );
-	ftype * visir = thrust::raw_pointer_cast( &imp1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] ); xsr += splitpt;
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] ); ysr += splitpt;
-	ftype * ssr = thrust::raw_pointer_cast( &ss1[0] ); ssr += splitpt;
-	ftype * rresr = thrust::raw_pointer_cast( &rres[0] );
-	ftype * iresr = thrust::raw_pointer_cast( &ires[0] );
-	int nvis = us1.size();
-	int npix = xs.size() - splitpt;
-	
-	dim3 dimGrid((npix - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calccompintensgauss<<<dimGrid,dimBlock>>>(usr,vsr,wsr,visrr,visir,nvis,xsr,ysr,ssr,rresr,iresr,npix);
-
-	thrust::copy(rres.begin(),rres.end(),isr.begin()+splitpt);
-	thrust::copy(ires.begin(),ires.end(),isi.begin()+splitpt);
-      }
     }
   }
 }
@@ -1494,14 +1227,11 @@ void calculateComplexGaussIntensitiesFromVisibilities(hvecf const & xs, hvecf co
 
 void calculateGaussVisibilitiesFromComplexIntensities(hvecf const & xs, hvecf const & ys, hvecf const & ss, hvecf const &isr, hvecf const &isi, hvecf const & us, hvecf const & vs, hvecf const & ws, hvecf & realp, hvecf & imp)
 {
-  int splitpt = us.size()/2;
-#pragma omp parallel
+  int splitpt = us.size();
   {
-#pragma omp sections
     {
-#pragma omp section
       {
-	int res1 = cudaSetDevice(omp_get_thread_num());
+	int res1 = cudaSetDevice(0);
 	dvecf xs1(xs);
 	dvecf ys1(ys);
 	dvecf ss1(ss);
@@ -1537,44 +1267,6 @@ void calculateGaussVisibilitiesFromComplexIntensities(hvecf const & xs, hvecf co
 	thrust::copy(resr.begin(),resr.end(),realp.begin());
 	thrust::copy(resi.begin(),resi.end(),imp.begin());
 
-      }
-#pragma omp section
-      {
-	int res2 = cudaSetDevice(omp_get_thread_num());
-
-	dvecf xs1(xs);
-	dvecf ys1(ys);
-	dvecf ss1(ss);
-	dvecf isr1(isr);
-	dvecf isi1(isi);
-	dvecf us1(us);
-	dvecf vs1(vs);
-	dvecf ws1(ws);
-
-
-	dvecf resr(us.size()-splitpt);
-	dvecf resi(us.size()-splitpt);
-
-	ftype * usr = thrust::raw_pointer_cast( &us1[0] ); usr += splitpt;
-	ftype * vsr = thrust::raw_pointer_cast( &vs1[0] ); vsr += splitpt;
-	ftype * wsr = thrust::raw_pointer_cast( &ws1[0] ); wsr += splitpt;
-	ftype * isrr = thrust::raw_pointer_cast( &isr1[0] );
-	ftype * isir = thrust::raw_pointer_cast( &isi1[0] );
-	ftype * xsr = thrust::raw_pointer_cast( &xs1[0] );
-	ftype * ysr = thrust::raw_pointer_cast( &ys1[0] );
-	ftype * ssr = thrust::raw_pointer_cast( &ss1[0] );
-	ftype * resrr = thrust::raw_pointer_cast( &resr[0] );
-	ftype * resir = thrust::raw_pointer_cast( &resi[0] );
-	int nvis = us1.size() - splitpt;
-	int npix = xs.size();
-	
-	dim3 dimGrid((nvis - 1)/BLOCK_SIZE + 1);
-	dim3 dimBlock(BLOCK_SIZE);
-
-	kernel_calcvisgausscomp<<<dimGrid,dimBlock>>>(usr,vsr,wsr,resrr,resir,nvis,xsr,ysr,ssr,isrr,isir,npix);
-
-	thrust::copy(resr.begin(),resr.end(),realp.begin()+splitpt);
-	thrust::copy(resi.begin(),resi.end(),imp.begin()+splitpt);
       }
     }
   }
