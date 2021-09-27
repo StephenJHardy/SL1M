@@ -1,4 +1,4 @@
-CPPFLAGS= -I./ -arch=sm_20 -O3
+CPPFLAGS= -I./ -arch=sm_86 -O3
 LDFLAGS= -Xcompiler -fopenmp -use_fast_math
 LDLIBS= -lcufft
 
